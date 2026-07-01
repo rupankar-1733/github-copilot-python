@@ -1,5 +1,6 @@
 // Client-side rendering and interaction for the Flask-backed Sudoku
 const SIZE = 9;
+const LEADERBOARD_STORAGE_KEY = 'sudokuTop10';
 let puzzle = [];
 let timerInterval = null;
 let elapsedSeconds = 0;
@@ -36,6 +37,79 @@ function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function loadLeaderboard() {
+  try {
+    const storedEntries = window.localStorage.getItem(LEADERBOARD_STORAGE_KEY);
+    if (!storedEntries) {
+      return [];
+    }
+
+    const parsedEntries = JSON.parse(storedEntries);
+    if (!Array.isArray(parsedEntries)) {
+      return [];
+    }
+
+    return parsedEntries
+      .filter((entry) => entry && typeof entry.name === 'string' && Number.isFinite(Number(entry.time)))
+      .map((entry) => ({
+        name: entry.name,
+        time: Number(entry.time),
+        difficulty: entry.difficulty || 'medium',
+        hints: Number(entry.hints || 0)
+      }))
+      .sort((firstEntry, secondEntry) => firstEntry.time - secondEntry.time)
+      .slice(0, 10);
+  } catch (error) {
+    console.error('Failed to load leaderboard:', error);
+    return [];
+  }
+}
+
+function saveLeaderboard(entries) {
+  try {
+    window.localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(entries));
+  } catch (error) {
+    console.error('Failed to save leaderboard:', error);
+  }
+}
+
+function renderLeaderboard() {
+  const leaderboardBody = document.getElementById('leaderboard-body');
+  if (!leaderboardBody) {
+    return;
+  }
+
+  leaderboardBody.innerHTML = '';
+
+  if (scoreboardEntries.length === 0) {
+    const emptyRow = document.createElement('tr');
+    const emptyCell = document.createElement('td');
+    emptyCell.colSpan = 5;
+    emptyCell.innerText = 'No scores yet';
+    emptyRow.appendChild(emptyCell);
+    leaderboardBody.appendChild(emptyRow);
+    return;
+  }
+
+  scoreboardEntries.forEach((entry, index) => {
+    const row = document.createElement('tr');
+    const rankCell = document.createElement('td');
+    const nameCell = document.createElement('td');
+    const timeCell = document.createElement('td');
+    const difficultyCell = document.createElement('td');
+    const hintsCell = document.createElement('td');
+
+    rankCell.innerText = `${index + 1}`;
+    nameCell.innerText = entry.name;
+    timeCell.innerText = formatTime(entry.time);
+    difficultyCell.innerText = entry.difficulty;
+    hintsCell.innerText = entry.hints;
+
+    row.append(rankCell, nameCell, timeCell, difficultyCell, hintsCell);
+    leaderboardBody.appendChild(row);
+  });
 }
 
 function createBoardElement() {
@@ -149,11 +223,17 @@ async function newGame() {
 function storeScoreEntry(name, finalTime, difficulty, hintsUsedCount) {
   const entry = {
     name,
-    finalTime,
+    time: finalTime,
     difficulty,
-    hintsUsed: hintsUsedCount
+    hints: hintsUsedCount
   };
-  scoreboardEntries.push(entry);
+
+  scoreboardEntries = [...scoreboardEntries, entry]
+    .sort((firstEntry, secondEntry) => firstEntry.time - secondEntry.time)
+    .slice(0, 10);
+
+  saveLeaderboard(scoreboardEntries);
+  renderLeaderboard();
   window.scoreboardEntries = scoreboardEntries;
 }
 
@@ -294,6 +374,9 @@ async function getHint() {
 
 // Wire buttons
 window.addEventListener('load', () => {
+  scoreboardEntries = loadLeaderboard();
+  renderLeaderboard();
+
   // Add delegated event listener for input validation on board container
   document.getElementById('sudoku-board').addEventListener('input', (e) => {
     if (e.target.classList.contains('sudoku-cell')) {
