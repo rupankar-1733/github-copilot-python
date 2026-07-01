@@ -5,6 +5,12 @@ from typing import List
 SIZE = 9
 EMPTY = 0
 
+DIFFICULTY_TO_CLUES = {
+    "easy": 40,
+    "medium": 32,
+    "hard": 26,
+}
+
 def deep_copy(board):
     return copy.deepcopy(board)
 
@@ -125,3 +131,9 @@ def generate_puzzle(clues=35):
     remove_cells(board, clues)
     puzzle = deep_copy(board)
     return puzzle, solution
+
+
+def generate_by_difficulty(difficulty: str = "medium") -> tuple:
+    """Generate a Sudoku puzzle for the requested difficulty level."""
+    clue_count = DIFFICULTY_TO_CLUES.get(difficulty.lower(), DIFFICULTY_TO_CLUES["medium"])
+    return generate_puzzle(clues=clue_count)

@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from sudoku_logic import SIZE, EMPTY, create_empty_board, fill_board, generate_puzzle, is_safe
+from sudoku_logic import SIZE, EMPTY, create_empty_board, fill_board, generate_by_difficulty, generate_puzzle, is_safe
 
 def test_generated_puzzles_have_unique_solution():
     """Every generated puzzle must have exactly one solution."""
@@ -67,6 +67,21 @@ def test_fill_board_produces_full_valid_board():
     board_is_valid(board)
 
 
+def test_generate_by_difficulty_uses_expected_clue_counts(monkeypatch):
+    calls = []
+
+    def fake_generate_puzzle(clues=35):
+        calls.append(clues)
+        return [[0]], [[1]]
+
+    monkeypatch.setattr("sudoku_logic.generate_puzzle", fake_generate_puzzle)
+
+    for difficulty, expected_clues in [("easy", 40), ("medium", 32), ("hard", 26), ("unknown", 32)]:
+        calls.clear()
+        generate_by_difficulty(difficulty)
+        assert calls == [expected_clues], f"{difficulty} should map to {expected_clues} clues"
+
+
 def test_generate_puzzle_returns_valid_puzzle_and_solution():
     random.seed(1)
     puzzle, solution = generate_puzzle(clues=35)
@@ -91,3 +106,22 @@ def test_generate_puzzle_returns_valid_puzzle_and_solution():
 
     non_zero_cells = sum(1 for row in puzzle for cell in row if cell != EMPTY)
     assert non_zero_cells >= 35, "Puzzle should have exactly the requested number of clues"
+
+
+def test_generate_by_difficulty_returns_valid_puzzles_with_minimum_clues():
+    expected_clue_counts = {
+        "easy": 40,
+        "medium": 32,
+        "hard": 26,
+    }
+
+    for difficulty, minimum_clues in expected_clue_counts.items():
+        puzzle, solution = generate_by_difficulty(difficulty)
+
+        assert len(puzzle) == SIZE and len(solution) == SIZE
+        board_is_valid(solution)
+
+        clue_count = sum(1 for row in puzzle for cell in row if cell != EMPTY)
+        assert clue_count >= minimum_clues, (
+            f"{difficulty} puzzle should have at least {minimum_clues} clues, got {clue_count}"
+        )
