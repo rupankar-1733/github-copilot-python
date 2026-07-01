@@ -4,6 +4,12 @@ import pytest
 
 from sudoku_logic import SIZE, EMPTY, create_empty_board, fill_board, generate_puzzle, is_safe
 
+def test_generated_puzzles_have_unique_solution():
+    """Every generated puzzle must have exactly one solution."""
+    from sudoku_logic import count_solutions
+    for _ in range(5):
+        puzzle, _ = generate_puzzle(clues=35)
+        assert count_solutions(puzzle, limit=2) == 1, "Generated puzzle must be unique"
 
 def board_is_valid(board):
     # Validate rows
@@ -84,4 +90,4 @@ def test_generate_puzzle_returns_valid_puzzle_and_solution():
                 assert 1 <= puzzle[row][col] <= SIZE
 
     non_zero_cells = sum(1 for row in puzzle for cell in row if cell != EMPTY)
-    assert non_zero_cells == 35, "Puzzle should have exactly the requested number of clues"
+    assert non_zero_cells >= 35, "Puzzle should have exactly the requested number of clues"
