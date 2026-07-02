@@ -1,6 +1,7 @@
 // Client-side rendering and interaction for the Flask-backed Sudoku
 const SIZE = 9;
 const LEADERBOARD_STORAGE_KEY = 'sudokuTop10';
+const THEME_STORAGE_KEY = 'sudokuTheme';
 let puzzle = [];
 let timerInterval = null;
 let elapsedSeconds = 0;
@@ -38,6 +39,46 @@ function formatTime(totalSeconds) {
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
+
+/* ---------------- Dark mode ---------------- */
+
+// Apply a theme ('dark' or 'light') and update the toggle button label.
+function applyTheme(theme) {
+  const toggleButton = document.getElementById('dark-mode-toggle');
+  if (theme === 'dark') {
+    document.body.classList.add('dark');
+    if (toggleButton) toggleButton.innerText = 'Light Mode';
+  } else {
+    document.body.classList.remove('dark');
+    if (toggleButton) toggleButton.innerText = 'Dark Mode';
+  }
+}
+
+// Flip the theme, persist the choice, and update the label.
+function toggleTheme() {
+  const isDark = document.body.classList.toggle('dark');
+  const theme = isDark ? 'dark' : 'light';
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+  }
+  const toggleButton = document.getElementById('dark-mode-toggle');
+  if (toggleButton) toggleButton.innerText = isDark ? 'Light Mode' : 'Dark Mode';
+}
+
+// Load the saved theme (defaults to light) on startup.
+function loadTheme() {
+  let theme = 'light';
+  try {
+    theme = window.localStorage.getItem(THEME_STORAGE_KEY) || 'light';
+  } catch (error) {
+    console.error('Failed to load theme:', error);
+  }
+  applyTheme(theme);
+}
+
+/* ---------------- Leaderboard ---------------- */
 
 function loadLeaderboard() {
   try {
@@ -112,6 +153,8 @@ function renderLeaderboard() {
   });
 }
 
+/* ---------------- Board rendering ---------------- */
+
 function createBoardElement() {
   const boardDiv = document.getElementById('sudoku-board');
   boardDiv.innerHTML = '';
@@ -123,6 +166,9 @@ function createBoardElement() {
       input.type = 'text';
       input.maxLength = 1;
       input.className = 'sudoku-cell';
+      // Checkerboard shade for alternating 3x3 boxes.
+      const boxIndex = Math.floor(i / 3) + Math.floor(j / 3);
+      input.classList.add(boxIndex % 2 === 0 ? 'box-a' : 'box-b');
       input.dataset.row = i;
       input.dataset.col = j;
       rowDiv.appendChild(input);
@@ -276,7 +322,7 @@ async function checkBoardCompletion() {
     const msg = document.getElementById('message');
     const difficulty = document.getElementById('difficulty-select').value;
     const finalTime = formatTime(elapsedSeconds);
-    msg.style.color = '#388e3c';
+    msg.style.color = '';
     msg.innerText = `Congratulations! You solved it in ${finalTime} with ${hintsUsed} hint(s).`;
 
     const name = window.prompt('Enter your name for the scoreboard:');
@@ -309,7 +355,7 @@ async function checkSolution() {
   const data = await res.json();
   const msg = document.getElementById('message');
   if (data.error) {
-    msg.style.color = '#d32f2f';
+    msg.style.color = '';
     msg.innerText = data.error;
     return;
   }
@@ -317,17 +363,17 @@ async function checkSolution() {
   for (let idx = 0; idx < inputs.length; idx++) {
     const inp = inputs[idx];
     if (inp.disabled) continue;
-    inp.className = 'sudoku-cell';
-    // Only mark as incorrect if not empty and in incorrect set
+    // Use classList so the box shade and other classes are preserved.
+    inp.classList.remove('incorrect');
     if (incorrect.has(idx) && inp.value !== '') {
-      inp.className = 'sudoku-cell incorrect';
+      inp.classList.add('incorrect');
     }
   }
   if (incorrect.size === 0) {
-    msg.style.color = '#388e3c';
+    msg.style.color = '';
     msg.innerText = 'Congratulations! You solved it!';
   } else {
-    msg.style.color = '#d32f2f';
+    msg.style.color = '';
     msg.innerText = 'Some cells are incorrect.';
   }
 }
@@ -352,11 +398,11 @@ async function getHint() {
   const data = await res.json();
   const msg = document.getElementById('message');
   if (data.error) {
-    msg.style.color = '#d32f2f';
+    msg.style.color = '';
     msg.innerText = data.error;
     return;
   }
-  // Fill the hint cell
+  // Fill the hint cell, lock it, and mark it with the distinct hint color.
   const row = data.row;
   const col = data.column;
   const value = data.value;
@@ -364,20 +410,22 @@ async function getHint() {
   const inp = inputs[idx];
   inp.value = value;
   inp.disabled = true;
-  inp.className = 'sudoku-cell prefilled hint-cell';
+  inp.classList.remove('conflict', 'incorrect');
+  inp.classList.add('prefilled', 'hint-cell');
   hintsUsed += 1;
-  msg.style.color = '#1976d2';
   msg.innerText = '';
 
+  updateConflictClasses();
   await checkBoardCompletion();
 }
 
 // Wire buttons
 window.addEventListener('load', () => {
+  loadTheme();
   scoreboardEntries = loadLeaderboard();
   renderLeaderboard();
 
-  // Add delegated event listener for input validation on board container
+  // Delegated input listener on the board container.
   document.getElementById('sudoku-board').addEventListener('input', (e) => {
     if (e.target.classList.contains('sudoku-cell')) {
       const val = e.target.value.replace(/[^1-9]/g, '');
@@ -390,6 +438,7 @@ window.addEventListener('load', () => {
   document.getElementById('new-game').addEventListener('click', newGame);
   document.getElementById('check-solution').addEventListener('click', checkSolution);
   document.getElementById('hint-button').addEventListener('click', getHint);
+  document.getElementById('dark-mode-toggle').addEventListener('click', toggleTheme);
   // initialize
   newGame();
 });
